@@ -1,5 +1,6 @@
 {
   "name": "bd_control",
+  "type": "module",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
@@ -10,7 +11,9 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "dotenv": "^16.5.0",
     "express": "^5.1.0",
-    "mongoose": "^8.14.1"
+    "mongoose": "^8.14.1",
+    "pg": "^8.15.6"
   }
 }

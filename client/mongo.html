@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ru">
+<head>…</head>
+<body class="main-body">
+  <div class="container mt-4">
+    <h3>MongoDB Editor</h3>
+    <p>База: <span id="dbName"></span></p>
+    <!-- Создание коллекции -->
+    <div class="input-group mb-3">
+      <input id="newCol" class="form-control" placeholder="Новая коллекция">
+      <div class="input-group-append">
+        <button id="createCol" class="btn btn-info">Создать коллекцию</button>
+      </div>
+    </div>
+    <!-- Загрузка коллекции -->
+    <div class="input-group mb-3">
+      <input id="colSelect" class="form-control" placeholder="Имя коллекции">
+      <div class="input-group-append">
+        <button id="loadCol" class="btn btn-primary">Загрузить коллекцию</button>
+      </div>
+    </div>
+    <div id="results" class="table-responsive" style="display:none;">
+      <table id="mongoTable" class="table table-bordered">
+        <thead><tr id="mHdr"></tr></thead>
+        <tbody id="mBody"></tbody>
+      </table>
+      <button id="addDoc" class="btn btn-success">Добавить документ</button>
+      <button id="saveDocs" class="btn btn-primary ml-2">Сохранить</button>
+    </div>
+  </div>
+  <script>
+    const p = new URLSearchParams(window.location.search);
+    const db = p.get('db');
+    document.getElementById('dbName').textContent = db;
+
+    document.getElementById('createCol').onclick = async () => {
+      const col = document.getElementById('newCol').value.trim();
+      if (!col) return;
+      const res = await fetch(`/api/mongo/${db}/${col}`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({})});
+      alert((await res.json()).message);
+    };
+
+    document.getElementById('loadCol').onclick = async () => {
+      const col = document.getElementById('colSelect').value.trim();
+      if (!col) return;
+      const res = await fetch(`/api/mongo/${db}/${col}`);
+      const arr = await res.json();
+      renderMongo(arr);
+    };
+
+    function renderMongo(arr) {
+      document.getElementById('results').style.display='block';
+      const cols = Object.keys(arr[0]||{});
+      const hdr = document.getElementById('mHdr'); hdr.innerHTML='';
+      cols.forEach(c=>hdr.insertAdjacentHTML('beforeend',`<th>${c}</th>`));
+      const body = document.getElementById('mBody'); body.innerHTML='';
+      arr.forEach(doc=>{
+        const tr=document.createElement('tr');
+        cols.forEach(c=> tr.insertAdjacentHTML('beforeend',`<td contenteditable>${doc[c]||''}</td>`));
+        body.append(tr);
+      });
+    }
+
+    // addDoc, saveDocs аналогично Postgres
+  </script>
+</body>
+</html>
