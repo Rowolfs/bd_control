@@ -1,10 +1,21 @@
 <!doctype html>
 <html lang="ru">
-<head>…</head>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/css/bootstrap.min.css"
+    crossorigin="anonymous"
+  />
+  <link rel="stylesheet" href="css/index.css">
+  <title>MongoDB Editor</title>
+</head>
 <body class="main-body">
   <div class="container mt-4">
     <h3>MongoDB Editor</h3>
     <p>База: <span id="dbName"></span></p>
+
     <!-- Создание коллекции -->
     <div class="input-group mb-3">
       <input id="newCol" class="form-control" placeholder="Новая коллекция">
@@ -12,56 +23,225 @@
         <button id="createCol" class="btn btn-info">Создать коллекцию</button>
       </div>
     </div>
-    <!-- Загрузка коллекции -->
+
+    <!-- Выбор и загрузка коллекции -->
     <div class="input-group mb-3">
-      <input id="colSelect" class="form-control" placeholder="Имя коллекции">
+      <select id="colSelect" class="form-control"></select>
       <div class="input-group-append">
         <button id="loadCol" class="btn btn-primary">Загрузить коллекцию</button>
       </div>
     </div>
+
+    <!-- Табличный редактор -->
     <div id="results" class="table-responsive" style="display:none;">
       <table id="mongoTable" class="table table-bordered">
         <thead><tr id="mHdr"></tr></thead>
         <tbody id="mBody"></tbody>
       </table>
       <button id="addDoc" class="btn btn-success">Добавить документ</button>
-      <button id="saveDocs" class="btn btn-primary ml-2">Сохранить</button>
+      <button id="saveDocs" class="btn btn-primary ml-2">Сохранить изменения</button>
+
+      <!-- Управление полями -->
+      <div class="mt-4">
+        <h5>Управление полями</h5>
+        <div class="form-row align-items-center">
+          <div class="col-3">
+            <input id="newFieldName" class="form-control" placeholder="Имя поля">
+          </div>
+          <div class="col-3">
+            <input id="newFieldValue" class="form-control" placeholder="Значение по умолчанию">
+          </div>
+          <div class="col-auto">
+            <button id="addField" class="btn btn-info">Добавить поле</button>
+          </div>
+        </div>
+        <div class="form-row align-items-center mt-2">
+          <div class="col-4">
+            <select id="deleteFieldSelect" class="form-control"></select>
+          </div>
+          <div class="col-auto">
+            <button id="deleteField" class="btn btn-danger">Удалить поле</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
+
   <script>
-    const p = new URLSearchParams(window.location.search);
-    const db = p.get('db');
+    const db = new URLSearchParams(window.location.search).get('db');
     document.getElementById('dbName').textContent = db;
 
-    document.getElementById('createCol').onclick = async () => {
-      const col = document.getElementById('newCol').value.trim();
-      if (!col) return;
-      const res = await fetch(`/api/mongo/${db}/${col}`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({})});
-      alert((await res.json()).message);
-    };
+    let headers = [];
+    let currentCol = null;
+    let dataCache = [];
 
-    document.getElementById('loadCol').onclick = async () => {
-      const col = document.getElementById('colSelect').value.trim();
-      if (!col) return;
-      const res = await fetch(`/api/mongo/${db}/${col}`);
-      const arr = await res.json();
-      renderMongo(arr);
-    };
+    // Получить список коллекций
+    async function fetchCollections() {
+      const res = await fetch(`/api/mongo/${db}/collections`);
+      const json = await res.json();
+      if (json.status === 'success') {
+        const sel = document.getElementById('colSelect');
+        sel.innerHTML = json.data.map(c => `<option value="${c}">${c}</option>`).join('');
+      } else {
+        alert('Не удалось получить список коллекций');
+      }
+    }
 
-    function renderMongo(arr) {
-      document.getElementById('results').style.display='block';
-      const cols = Object.keys(arr[0]||{});
-      const hdr = document.getElementById('mHdr'); hdr.innerHTML='';
-      cols.forEach(c=>hdr.insertAdjacentHTML('beforeend',`<th>${c}</th>`));
-      const body = document.getElementById('mBody'); body.innerHTML='';
-      arr.forEach(doc=>{
-        const tr=document.createElement('tr');
-        cols.forEach(c=> tr.insertAdjacentHTML('beforeend',`<td contenteditable>${doc[c]||''}</td>`));
+    // Рендер шапки таблицы
+    function renderHeader() {
+      const hdr = document.getElementById('mHdr');
+      hdr.innerHTML = headers.map(h => `<th>${h}</th>`).join('');
+      updateFieldSelector();
+    }
+
+    // Рендер тела таблицы
+    function renderBody() {
+      const body = document.getElementById('mBody');
+      body.innerHTML = '';
+      if (dataCache.length === 0) {
+        const tr = document.createElement('tr');
+        tr.dataset.new = 'true';
+        headers.forEach(() => tr.insertAdjacentHTML('beforeend', '<td contenteditable></td>'));
+        body.append(tr);
+        return;
+      }
+      dataCache.forEach((doc, idx) => {
+        const tr = document.createElement('tr');
+        tr.dataset.index = idx;
+        tr.dataset._id = doc._id;
+        headers.forEach(h => {
+          tr.insertAdjacentHTML('beforeend', `<td contenteditable>${doc[h] ?? ''}</td>`);
+        });
         body.append(tr);
       });
     }
 
-    // addDoc, saveDocs аналогично Postgres
+    // Полный рендер (сбрасываем headers перед сборкой)
+    function renderMongo(data) {
+      dataCache = data;
+      // Сбрасываем старый список полей
+      const keys = new Set();
+      // Всегда включаем _id
+      keys.add('_id');
+      data.forEach(d => Object.keys(d).forEach(k => keys.add(k)));
+      headers = Array.from(keys);
+      document.getElementById('results').style.display = 'block';
+      renderHeader();
+      renderBody();
+    }
+
+    // Обновить селект удаления поля
+    function updateFieldSelector() {
+      const sel = document.getElementById('deleteFieldSelect');
+      sel.innerHTML = headers
+        .filter(h => h !== '_id')
+        .map(h => `<option value="${h}">${h}</option>`)
+        .join('');
+    }
+
+    // Создать коллекцию
+    document.getElementById('createCol').onclick = async () => {
+      const newName = document.getElementById('newCol').value.trim();
+      if (!newName) return alert('Введите имя коллекции');
+      const res = await fetch(`/api/mongo/data/${db}/${newName}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const json = await res.json();
+      alert(json.message || json.status);
+      if (json.status === 'success') {
+        document.getElementById('newCol').value = '';
+        await fetchCollections();
+      }
+    };
+
+    // Загрузить коллекцию (сбрасываем headers перед fetch)
+    document.getElementById('loadCol').onclick = async () => {
+      currentCol = document.getElementById('colSelect').value;
+      headers = [];          // <<< сбрасываем предыдущие поля
+      dataCache = [];
+      document.getElementById('results').style.display = 'none';
+      const res = await fetch(`/api/mongo/data/${db}/${currentCol}`);
+      const json = await res.json();
+      if (json.status !== 'success') return alert(json.message);
+      renderMongo(json.data);
+    };
+
+    // Добавить документ
+    document.getElementById('addDoc').onclick = () => {
+      const tr = document.createElement('tr');
+      tr.dataset.new = 'true';
+      headers.forEach(() => tr.insertAdjacentHTML('beforeend', '<td contenteditable></td>'));
+      document.getElementById('mBody').append(tr);
+    };
+
+    // Сохранить изменения (upsert)
+    document.getElementById('saveDocs').onclick = async () => {
+      if (!currentCol) return alert('Сначала загрузите коллекцию');
+      const rows = [...document.querySelectorAll('#mBody tr')];
+      for (let tr of rows) {
+        const cells = [...tr.children].map(td => td.textContent);
+        const doc = {};
+        headers.forEach((h, i) => {
+          if (h === '_id') {
+            doc._id = tr.dataset._id;
+          } else {
+            doc[h] = cells[i];
+          }
+        });
+        const res = await fetch(`/api/mongo/data/${db}/${currentCol}/row`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(doc)
+        });
+        const json = await res.json();
+        if (json.status !== 'success') {
+          alert('Ошибка: ' + json.message);
+        }
+      }
+      alert('Сохранено');
+      document.getElementById('loadCol').click();
+    };
+
+    // Добавить поле
+    document.getElementById('addField').onclick = async () => {
+      const name = document.getElementById('newFieldName').value.trim();
+      const def  = document.getElementById('newFieldValue').value;
+      if (!name) return alert('Введите имя поля');
+      const res = await fetch(`/api/mongo/data/${db}/${currentCol}/column`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ columnName: name, defaultValue: def })
+      });
+      const json = await res.json();
+      alert(json.message || json.status);
+      if (json.status === 'success') {
+        headers.push(name);
+        renderHeader();
+        renderBody();
+      }
+    };
+
+    // Удалить поле
+    document.getElementById('deleteField').onclick = async () => {
+      const name = document.getElementById('deleteFieldSelect').value;
+      const res = await fetch(`/api/mongo/data/${db}/${currentCol}/column`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ columnName: name })
+      });
+      const json = await res.json();
+      alert(json.message || json.status);
+      if (json.status === 'success') {
+        headers = headers.filter(h => h !== name);
+        renderHeader();
+        renderBody();
+      }
+    };
+
+    // Инициализация
+    fetchCollections();
   </script>
 </body>
 </html>

@@ -56,22 +56,14 @@ export default function setupPostgresRoutes(app) {
   // Создание таблицы
   app.post('/api/postgres/:db', async (req, res) => {
     if (!pool) return res.status(400).json({ status: 'error', message: 'Not connected' });
-    const { table, columns } = req.body;
-    if (!table || !columns) {
-      return res.status(400).json({ status: 'error', message: 'table and columns required' });
+    const { table } = req.body;
+    if (!table) {
+      return res.status(400).json({ status: 'error', message: 'table required' });
     }
     const tableName = sanitizeIdentifier(table);
     // Поддерживаем raw SQL или формат name:type,name2:type2
-    let colDefs = columns;
-    if (columns.includes(':')) {
-      const defs = columns.split(',').map(pair => {
-        const [name, type] = pair.trim().split(':');
-        return { name: sanitizeIdentifier(name), type: type ? type.trim() : '' };
-      }).filter(c => c.name && c.type);
-      colDefs = defs.map(c => `"${c.name}" ${c.type}`).join(', ');
-    }
     try {
-      await pool.query(`CREATE TABLE IF NOT EXISTS "${tableName}" (${colDefs});`);
+      await pool.query(`CREATE TABLE IF NOT EXISTS ${tableName} (id SERIAL PRIMARY KEY);`);
       res.json({ status: 'success', message: `Table ${tableName} created` });
     } catch (err) {
       res.status(500).json({ status: 'error', message: 'Create table failed', error: err.message });

@@ -17,16 +17,18 @@
       <div class="card-header">Создать новую таблицу</div>
       <div class="card-body">
         <div class="form-row align-items-end">
-          <div class="col"><input id="newTableName" class="form-control" placeholder="Имя таблицы"></div>
+          <div class="col"><input id="newTableName" class="form-control" placeholder="Имя таблицы" style="text-transform: lowercase;"></div>
           <div class="col-auto"><button id="createTable" class="btn btn-info">Создать</button></div>
         </div>
       </div>
     </div>
 
     <!-- Выбор и загрузка таблицы -->
-    <div class="form-row mb-3">
-      <div class="col-4"><input id="tableSelect" class="form-control" placeholder="Имя таблицы"></div>
-      <div class="col-auto"><button id="loadTable" class="btn btn-primary">Загрузить таблицу</button></div>
+    <div class="input-group mb-3">
+      <select id="tableSelect" class="form-control"></select>
+      <div class="input-group-append">
+        <button id="loadTable" class="btn btn-primary">Загрузить таблицу</button>
+      </div>
     </div>
 
     <!-- Табличный редактор -->
@@ -73,19 +75,41 @@
     let currentTable = '';
     let headers = [];
 
+    // Получить список таблиц
+    async function fetchTables() {
+      const res = await fetch(`/api/postgres/${db}/tables`);
+      const json = await res.json();
+      if (json.status === 'success') {
+        const sel = document.getElementById('tableSelect');
+        sel.innerHTML = json.data.map(t => `<option value="${t}">${t}</option>`).join('');
+      } else {
+        alert('Не удалось получить список таблиц');
+      }
+    }
+
     // Создать таблицу
     document.getElementById('createTable').onclick = async () => {
       const table = document.getElementById('newTableName').value.trim();
       if (!table) return alert('Введите имя таблицы');
-      const res = await fetch(`/api/postgres/${db}`, { method: 'POST' });
+      const res = await fetch(`/api/postgres/${db}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ table: table })
+      });
       const json = await res.json();
       alert(json.message || json.status);
+      if (json.status === 'success') {
+        document.getElementById('newTableName').value = '';
+        await fetchTables();
+        document.getElementById('tableSelect').value = table;
+        document.getElementById('loadTable').click();
+      }
     };
 
     // Загрузить данные таблицы
     document.getElementById('loadTable').onclick = async () => {
-      const tbl = document.getElementById('tableSelect').value.trim();
-      if (!tbl) return alert('Введите имя таблицы');
+      const tbl = document.getElementById('tableSelect').value;
+      if (!tbl) return alert('Выберите таблицу');
       const res = await fetch(`/api/postgres/${db}/${tbl}`);
       const json = await res.json();
       if (json.status === 'error') return alert(json.message);
@@ -173,6 +197,9 @@
       alert(json.message || json.status);
       if (json.status === 'success') document.getElementById('loadTable').click();
     };
+
+    // Инициализация
+    fetchTables();
   </script>
 </body>
 </html>
