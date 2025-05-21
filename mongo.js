@@ -1,5 +1,14 @@
 import mongoose from 'mongoose';
 
+import { Pool } from 'pg';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const host = process.env.MN_HOST;
+const port = process.env.MN_PORT;
+
+
 export default function setupMongoRoutes(app) {
   let connection = null;
   let currentDb = '';
@@ -18,7 +27,7 @@ export default function setupMongoRoutes(app) {
         await connection.close();
       }
       connection = await mongoose.createConnection(
-        `mongodb://localhost:27017/${dbName}`,
+        `mongodb://${host}:${port}/${dbName}`,
         {
           useNewUrlParser: true,
           useUnifiedTopology: true,
